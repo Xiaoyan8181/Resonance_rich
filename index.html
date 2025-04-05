@@ -178,12 +178,12 @@
 
     // 狀態變數
     let diceFilterEnabled = false;
-    let diceOffset = 0; // 0: 1~6, 1: 2~7, 2: 3~8, 3: 4~9
+    let diceOffset = 0;
     let lastResults = null;
     let lastClickedRow = null;
     let lastClickedCol = null;
     let lastClickedCell = null;
-    let isDirectionMode = true; // 預設方向模式
+    let isDirectionMode = true;
     let bannedDirection = null;
 
     // 重寫的 BFS 搜尋函數，嚴格禁止相鄰相反方向
@@ -355,9 +355,11 @@
     }
 
     // 顯示結果
-    function displayResults(results, row, col) {
-        let html = `<h3>路徑資訊 (從 (${row}, ${col}))</h3>`;
-	html += `<button id="diceFilterBtn" style="background-color: ${diceFilterEnabled ? '#90EE90' : '#FFFFFF'}; color: #000000">以骰子篩選</button>`;
+    function displayResults(results, row, col, isTown = false) {
+        // 如果是城市，使用城市名稱；否則使用坐標
+        const title = isTown ? getTownName(row, col) : `(${row}, ${col})`;
+        let html = `<h3>路徑資訊 (從 ${title})</h3>`;
+        html += `<button id="diceFilterBtn" style="background-color: ${diceFilterEnabled ? '#90EE90' : '#FFFFFF'}; color: #000000">以骰子篩選</button>`;
         html += `<br><button id="directionModeBtn" style="background-color: ${isDirectionMode ? '#90EE90' : '#FFFFFF'}">方向模式</button>`;
         html += `<button id="banModeBtn" style="background-color: ${!isDirectionMode ? '#90EE90' : '#FFFFFF'}">禁路徑模式</button>`;
 
@@ -413,7 +415,6 @@
 
         infoPanel.innerHTML = html;
 
-        // 為路徑添加滑鼠事件
         const pathItems = document.querySelectorAll('.path-item');
         pathItems.forEach(item => {
             let blinkInterval = null;
@@ -433,42 +434,38 @@
             });
         });
 
-        // 為模式按鈕添加事件
         document.getElementById('directionModeBtn').addEventListener('click', () => {
             isDirectionMode = true;
             bannedDirection = null;
-            displayResults(lastResults, lastClickedRow, lastClickedCol);
+            displayResults(lastResults, lastClickedRow, lastClickedCol, mapData[lastClickedRow][lastClickedCol] === 2);
         });
         document.getElementById('banModeBtn').addEventListener('click', () => {
             isDirectionMode = false;
             bannedDirection = null;
-            displayResults(lastResults, lastClickedRow, lastClickedCol);
+            displayResults(lastResults, lastClickedRow, lastClickedCol, mapData[lastClickedRow][lastClickedCol] === 2);
         });
 
-        // 為禁路徑模式的方向按鈕添加事件
         const banButtons = document.querySelectorAll('.ban-direction-btn');
         banButtons.forEach(btn => {
             btn.addEventListener('click', () => {
                 bannedDirection = btn.getAttribute('data-direction');
-                displayResults(lastResults, lastClickedRow, lastClickedCol);
+                displayResults(lastResults, lastClickedRow, lastClickedCol, mapData[lastClickedRow][lastClickedCol] === 2);
             });
         });
 
-        // 為骰子篩選按鈕添加事件
         document.getElementById('diceFilterBtn').addEventListener('click', () => {
             diceFilterEnabled = !diceFilterEnabled;
             if (!diceFilterEnabled) {
                 diceOffset = 0;
             }
-            displayResults(lastResults, lastClickedRow, lastClickedCol);
+            displayResults(lastResults, lastClickedRow, lastClickedCol, mapData[lastClickedRow][lastClickedCol] === 2);
         });
 
-        // 為骰子偏移按鈕添加事件
         const offsetButtons = document.querySelectorAll('.dice-offset-btn');
         offsetButtons.forEach(btn => {
             btn.addEventListener('click', () => {
                 diceOffset = parseInt(btn.getAttribute('data-offset'));
-                displayResults(lastResults, lastClickedRow, lastClickedCol);
+                displayResults(lastResults, lastClickedRow, lastClickedCol, mapData[lastClickedRow][lastClickedCol] === 2);
             });
         });
     }
@@ -495,7 +492,7 @@
         const classifiedResults = classifyPaths(allPaths);
         lastResults = classifiedResults;
 
-        displayResults(classifiedResults, row, col);
+        displayResults(classifiedResults, row, col, false);
     }
 
     // 處理城市格子點擊的函數
@@ -516,8 +513,11 @@
         lastClickedRow = row;
         lastClickedCol = col;
 
-        const townName = getTownName(row, col);
-        infoPanel.innerHTML = `<h3>城市: ${townName}</h3>`;
+        const allPaths = bfs(row, col);
+        const classifiedResults = classifyPaths(allPaths);
+        lastResults = classifiedResults;
+
+        displayResults(classifiedResults, row, col, true);
     }
 
     // 遍歷地圖數據並創建網格
@@ -571,7 +571,7 @@
         if (!diceFilterEnabled) {
             diceOffset = 0;
         }
-        displayResults(lastResults, lastClickedRow, lastClickedCol);
+        displayResults(lastResults, lastClickedRow, lastClickedCol, mapData[lastClickedRow][lastClickedCol] === 2);
     });
 </script>
 <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'92b4f23acf7d6a86',t:'MTc0MzgxMzEyNC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
