@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Map</title>
+    <style>
+        body {
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            display: flex;
+            align-items: center;
+        }
+        #gameMap {
+            display: grid;
+            grid-template-columns: repeat(55, 15px);
+            grid-template-rows: repeat(33, 15px);
+            gap: 0;
+        }
+        .cell {
+            width: 15px;
+            height: 15px;
+            box-sizing: border-box;
+        }
+        .empty {
+            background-color: #000;
+        }
+        .road {
+            background-color: #666;
+            border: 2px solid #333;
+            cursor: pointer;
+        }
+        .road.selected {
+            background-color: #87CEEB; /* 淺藍色 */
+        }
+        .town {
+            background-color: #ff0;
+            border: 2px solid #333;
+        }
+        .road.connected-right {
+            border-right: 1px solid #333;
+        }
+        .road.connected-left {
+            border-left: 1px solid #333;
+        }
+        .road.connected-bottom {
+            border-bottom: 1px solid #333;
+        }
+        .road.connected-top {
+            border-top: 1px solid #333;
+        }
+        .channel-horizontal {
+            background-color: #666;
+            height: 4px;
+            margin: 5.5px 0;
+            border: none;
+        }
+        .channel-vertical {
+            background-color: #666;
+            width: 4px;
+            margin: 0 5.5px;
+            border: none;
+        }
+        #infoPanel {
+            margin-left: 20px;
+            color: white;
+            font-family: Arial, sans-serif;
+            max-width: 400px;
+            background-color: #222;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #infoPanel h3 {
+            margin: 0 0 10px 0;
+            display: inline-block;
+        }
+        #infoPanel p {
+            margin: 5px 0;
+        }
+        #diceFilterBtn, #diceOffsetBtn1, #diceOffsetBtn2, #diceOffsetBtn3 {
+            margin-left: 10px;
+            padding: 5px 10px;
+            background-color: #444;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        #diceFilterBtn:hover, #diceOffsetBtn1:hover, #diceOffsetBtn2:hover, #diceOffsetBtn3:hover {
+            background-color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="gameMap"></div>
+        <div id="infoPanel">
+            <h3>路徑資訊</h3>
+            <button id="diceFilterBtn">以骰子篩選</button>
+            <p>點擊一個道路格子以查看距離 9 格以內的路徑。</p>
+        </div>
+    </div>
+
+<script>
+    // 地圖數據 (33 行 x 55 列)
+    const mapData = [
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,2,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,2],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,2,1,1,1,1,1,2,1,1,1,1,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [2,1,1,1,1,1,1,1,1,1,1,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,2,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,2,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,2,1,1,1,1,1,2,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+    ];
+
+// 城市名稱映射
+    const townNames = {
+        '18,0': '阿妮塔發射中心',
+        '18,12': '阿妮塔能源研究所',
+        '6,14': '7號自由港',
+        '0,24': '澄明數據中心',
+        '10,18': '阿妮塔戰備工廠',
+        '32,8': '海角城',
+        '32,2': '匯流塔',
+        '26,20': '遠星大橋',
+        '26,26': '貢露城',
+        '22,32': '(未知)',
+        '16,44': '淘金樂園',
+        '8,40': '曼德礦場',
+        '4,32': '修格里城',
+        '4,38': '鐵盟哨站',
+        '4,44': '荒原站',
+        '0,54': '雲岫橋基地'
+    };
+
+    // 獲取城市名稱的函數
+    function getTownName(row, col) {
+        const key = `${row},${col}`;
+        return townNames[key] || `未知城市 (${row}, ${col})`;
+    }
+
+    // 獲取遊戲地圖容器和資訊面板
+    const gameMap = document.getElementById('gameMap');
+    const infoPanel = document.getElementById('infoPanel');
+    const diceFilterBtn = document.getElementById('diceFilterBtn');
+
+    // 骰子篩選的狀態
+    let diceFilterEnabled = false;
+    let diceOffset = 0; // 0: 1~6, 1: 2~7, 2: 3~8, 3: 4~9
+    let lastResults = null; // 儲存上次的計算結果
+    let lastClickedRow = null;
+    let lastClickedCol = null;
+    let lastClickedCell = null; // 儲存上次點擊的格子（道路或城市）
+
+    // 重寫的 BFS 搜尋函數，嚴格禁止相鄰相反方向
+    function bfs(startRow, startCol) {
+        const queue = [{ row: startRow, col: startCol, steps: 0, path: [], prevDir: null }];
+        const visited = new Set(); // 記錄訪問過的格子與路徑
+        const allPaths = []; // 儲存所有找到的路徑
+
+        while (queue.length > 0) {
+            const { row, col, steps, path, prevDir } = queue.shift();
+
+            // 如果找到城市 (2) 且不是起點，記錄路徑
+            if (mapData[row][col] === 2 && (row !== startRow || col !== startCol)) {
+                allPaths.push({ row, col, steps, path });
+            }
+
+            // 如果步數超過 9，停止此路徑
+            if (steps >= 9) continue;
+
+            // 定義四個方向
+            const directions = [
+                { dr: -2, dc: 0, name: '上', opposite: '下' },
+                { dr: 2, dc: 0, name: '下', opposite: '上' },
+                { dr: 0, dc: -2, name: '左', opposite: '右' },
+                { dr: 0, dc: 2, name: '右', opposite: '左' }
+            ];
+
+            for (const { dr, dc, name, opposite } of directions) {
+                // 嚴格禁止與前一步相反的方向（除了第一步）
+                if (steps > 0 && prevDir === opposite) continue;
+
+                const newRow = row + dr;
+                const newCol = col + dc;
+                const channelRow = row + dr / 2;
+                const channelCol = col + dc / 2;
+
+                // 檢查邊界
+                if (newRow < 0 || newRow >= 33 || newCol < 0 || newCol >= 55) continue;
+
+                // 檢查通道是否存在
+                if (mapData[channelRow][channelCol] !== 1) continue;
+
+                // 檢查新位置是否為道路或城市
+                if (mapData[newRow][newCol] !== 1 && mapData[newRow][newCol] !== 2) continue;
+
+                // 創建唯一鍵，包含座標和路徑
+                const key = `${newRow},${newCol},${path.join('')}`;
+                if (visited.has(key)) continue;
+
+                visited.add(key);
+                queue.push({
+                    row: newRow,
+                    col: newCol,
+                    steps: steps + 1,
+                    path: [...path, name],
+                    prevDir: name // 更新前一步方向
+                });
+            }
+        }
+
+        return allPaths;
+    }
+
+    // 根據第一步方向分類路徑
+    function classifyPaths(paths) {
+        const classified = { 上: [], 下: [], 左: [], 右: [] };
+        for (const path of paths) {
+            if (path.path.length > 0) {
+                const firstDirection = path.path[0];
+                classified[firstDirection].push(path);
+            }
+        }
+        return classified;
+    }
+
+    // 計算路徑上所有格子的座標（包括道路和通道）
+    function getPathCells(startRow, startCol, path) {
+        const cells = [];
+        let currentRow = startRow;
+        let currentCol = startCol;
+
+        // 添加起點
+        cells.push({ row: currentRow, col: currentCol });
+
+        // 根據路徑方向計算每一步的格子
+        for (const direction of path) {
+            let channelRow, channelCol, newRow, newCol;
+            if (direction === '上') {
+                channelRow = currentRow - 1;
+                channelCol = currentCol;
+                newRow = currentRow - 2;
+                newCol = currentCol;
+            } else if (direction === '下') {
+                channelRow = currentRow + 1;
+                channelCol = currentCol;
+                newRow = currentRow + 2;
+                newCol = currentCol;
+            } else if (direction === '左') {
+                channelRow = currentRow;
+                channelCol = currentCol - 1;
+                newRow = currentRow;
+                newCol = currentCol - 2;
+            } else if (direction === '右') {
+                channelRow = currentRow;
+                channelCol = currentCol + 1;
+                newRow = currentRow;
+                newCol = currentCol + 2;
+            }
+
+            // 添加通道和下一個道路格子
+            cells.push({ row: channelRow, col: channelCol });
+            cells.push({ row: newRow, col: newCol });
+
+            // 更新當前位置
+            currentRow = newRow;
+            currentCol = newCol;
+        }
+
+        return cells;
+    }
+
+    // 開始閃爍效果
+    function startBlinking(cells) {
+        let isAlternate = false;
+        const interval = setInterval(() => {
+            cells.forEach(({ row, col }) => {
+                const index = row * 55 + col;
+                const cell = gameMap.children[index];
+                if (cell) {
+                    if (mapData[row][col] === 2) {
+                        // 城市：黃色與橘色閃爍
+                        cell.style.backgroundColor = isAlternate ? '#FFFF00' : '#FFA500';
+                    } else {
+                        // 道路或通道：檢查是否為選中格子
+                        if (cell === lastClickedCell) {
+                            cell.style.backgroundColor = isAlternate ? '#0000FF' : '#00FF00';
+                        } else {
+                            cell.style.backgroundColor = isAlternate ? '#808080' : '#00FF00';
+                        }
+                    }
+                }
+            });
+            isAlternate = !isAlternate;
+        }, 500); // 每 500ms 切換一次顏色
+
+        return interval;
+    }
+
+    // 停止閃爍並恢復原始顏色
+    function stopBlinking(cells, interval) {
+        clearInterval(interval);
+        cells.forEach(({ row, col }) => {
+            const index = row * 55 + col;
+            const cell = gameMap.children[index];
+            if (cell) {
+                if (mapData[row][col] === 2) {
+                    cell.style.backgroundColor = '#FFFF00'; // 城市恢復黃色
+                } else if (cell === lastClickedCell) {
+                    cell.style.backgroundColor = '#0000FF'; // 選中的道路恢復藍色
+                } else {
+                    cell.style.backgroundColor = '#808080'; // 其他道路和通道恢復灰色
+                }
+            }
+        });
+    }
+
+    // 顯示結果（可選啟用骰子篩選，並添加閃爍效果）
+    function displayResults(results, row, col) {
+        let html = `<h3>路徑資訊 (從 (${row}, ${col}))</h3>`;
+        html += '<button id="diceFilterBtn">以骰子篩選</button>';
+
+        // 如果啟用了骰子篩選，添加偏移按鈕
+        if (diceFilterEnabled) {
+            html += `
+                <button id="diceOffsetBtn1">+1</button>
+                <button id="diceOffsetBtn2">+2</button>
+                <button id="diceOffsetBtn3">+3</button>
+            `;
+        }
+
+        if (Object.keys(results).length === 0 || !Object.values(results).some(towns => towns.length > 0)) {
+            html += '<p>從此格子出發，9 格以內無法到達任何城市。</p>';
+        } else {
+            // 如果啟用了骰子篩選，應用範圍限制
+            const minSteps = diceFilterEnabled ? 1 + diceOffset : 1;
+            const maxSteps = diceFilterEnabled ? 6 + diceOffset : 9;
+
+            for (const direction in results) {
+                const towns = results[direction].filter(town => town.steps >= minSteps && town.steps <= maxSteps);
+                if (towns.length > 0) {
+                    html += `<p><strong>第一步方向：${direction}</strong></p>`;
+                    for (const { row: townRow, col: townCol, steps, path } of towns) {
+                        const townName = getTownName(townRow, townCol);
+                        html += `<p class="path-item" data-start-row="${row}" data-start-col="${col}" data-path="${path.join(',')}">到達 ${townName}：${steps} 格，路徑：${path.join('')}</p>`;
+                    }
+                }
+            }
+        }
+
+        infoPanel.innerHTML = html;
+
+        // 為路徑添加滑鼠事件
+        const pathItems = document.querySelectorAll('.path-item');
+        pathItems.forEach(item => {
+            let blinkInterval = null;
+            item.addEventListener('mouseover', () => {
+                const startRow = parseInt(item.getAttribute('data-start-row'));
+                const startCol = parseInt(item.getAttribute('data-start-col'));
+                const path = item.getAttribute('data-path').split(',');
+                const cells = getPathCells(startRow, startCol, path);
+                blinkInterval = startBlinking(cells);
+            });
+            item.addEventListener('mouseout', () => {
+                const startRow = parseInt(item.getAttribute('data-start-row'));
+                const startCol = parseInt(item.getAttribute('data-start-col'));
+                const path = item.getAttribute('data-path').split(',');
+                const cells = getPathCells(startRow, startCol, path);
+                stopBlinking(cells, blinkInterval);
+            });
+        });
+
+        // 為按鈕重新附加事件監聽器
+        document.getElementById('diceFilterBtn').addEventListener('click', () => {
+            diceFilterEnabled = !diceFilterEnabled; // 切換篩選狀態
+            if (!diceFilterEnabled) {
+                diceOffset = 0; // 禁用篩選時重置偏移
+            }
+            displayResults(lastResults, lastClickedRow, lastClickedCol);
+        });
+
+        if (diceFilterEnabled) {
+            document.getElementById('diceOffsetBtn1').addEventListener('click', () => {
+                diceOffset = 1;
+                displayResults(lastResults, lastClickedRow, lastClickedCol);
+            });
+            document.getElementById('diceOffsetBtn2').addEventListener('click', () => {
+                diceOffset = 2;
+                displayResults(lastResults, lastClickedRow, lastClickedCol);
+            });
+            document.getElementById('diceOffsetBtn3').addEventListener('click', () => {
+                diceOffset = 3;
+                displayResults(lastResults, lastClickedRow, lastClickedCol);
+            });
+        }
+    }
+
+    // 處理道路格子點擊的函數
+    function handleRoadClick(cell, row, col) {
+        // 重置上一次點擊格子的顏色
+        if (lastClickedCell) {
+            if (mapData[lastClickedRow][lastClickedCol] === 2) {
+                lastClickedCell.style.backgroundColor = '#FFFF00'; // 恢復城市為黃色
+            } else {
+                lastClickedCell.style.backgroundColor = '#808080'; // 恢復道路為灰色
+            }
+            lastClickedCell.classList.remove('selected');
+        }
+
+        // 高亮顯示被點擊的格子為藍色
+        cell.style.backgroundColor = '#0000FF';
+        cell.classList.add('selected');
+        lastClickedCell = cell;
+
+        // 儲存點擊的位置
+        lastClickedRow = row;
+        lastClickedCol = col;
+
+        // 執行 BFS 搜尋所有路徑
+        const allPaths = bfs(row, col);
+
+        // 根據第一步方向分類
+        const classifiedResults = classifyPaths(allPaths);
+
+        // 儲存結果以供篩選
+        lastResults = classifiedResults;
+
+        // 顯示結果
+        displayResults(classifiedResults, row, col);
+    }
+
+    // 處理城市格子點擊的函數
+    function handleTownClick(cell, row, col) {
+        // 重置上一次點擊格子的顏色
+        if (lastClickedCell) {
+            if (mapData[lastClickedRow][lastClickedCol] === 2) {
+                lastClickedCell.style.backgroundColor = '#FFFF00'; // 恢復城市為黃色
+            } else {
+                lastClickedCell.style.backgroundColor = '#808080'; // 恢復道路為灰色
+            }
+            lastClickedCell.classList.remove('selected');
+        }
+
+        // 高亮顯示被點擊的城市為紅色
+        cell.style.backgroundColor = '#FF0000';
+        cell.classList.add('selected');
+        lastClickedCell = cell;
+
+        // 儲存點擊的位置
+        lastClickedRow = row;
+        lastClickedCol = col;
+
+        // 顯示城市名稱
+        const townName = getTownName(row, col);
+        infoPanel.innerHTML = `<h3>城市: ${townName}</h3>`;
+    }
+
+    // 遍歷地圖數據並創建網格
+    for (let row = 0; row < 33; row++) {
+        for (let col = 0; col < 55; col++) {
+            const cell = document.createElement('div');
+            cell.classList.add('cell');
+
+            // 判斷當前位置是否為偶數行或列（通道）
+            const isEvenRow = row % 2 === 0;
+            const isEvenCol = col % 2 === 0;
+
+            // 根據數據確定格子類型
+            if (mapData[row][col] === 0) {
+                cell.classList.add('empty');
+            } else if (mapData[row][col] === 1) {
+                if (isEvenRow && !isEvenCol) {
+                    cell.classList.add('channel-horizontal');
+                } else if (!isEvenRow && isEvenCol) {
+                    cell.classList.add('channel-vertical');
+                } else {
+                    cell.classList.add('road');
+
+                    // 為道路格子添加點擊事件
+                    cell.addEventListener('click', () => handleRoadClick(cell, row, col));
+
+                    // 檢查相連的道路（僅適用於道路，不包括通道）
+                    if (!isEvenRow && !isEvenCol) {
+                        if (col < 54 && col % 2 === 0 && mapData[row][col + 1] === 1 && mapData[row][col + 2] === 1) {
+                            cell.classList.add('connected-right');
+                        }
+                        if (col > 0 && col % 2 === 0 && mapData[row][col - 1] === 1 && mapData[row][col - 2] === 1) {
+                            cell.classList.add('connected-left');
+                        }
+                        if (row < 32 && row % 2 === 0 && mapData[row + 1][col] === 1 && mapData[row + 2][col] === 1) {
+                            cell.classList.add('connected-bottom');
+                        }
+                        if (row > 0 && row % 2 === 0 && mapData[row - 1][col] === 1 && mapData[row - 2][col] === 1) {
+                            cell.classList.add('connected-top');
+                        }
+                    }
+                }
+            } else if (mapData[row][col] === 2) {
+                cell.classList.add('town');
+                // 為城市格子添加點擊事件和懸停樣式
+                cell.addEventListener('click', () => handleTownClick(cell, row, col));
+                cell.style.cursor = 'pointer'; // 滑鼠懸停時顯示可點擊樣式
+            }
+
+            gameMap.appendChild(cell);
+        }
+    }
+
+    // 為骰子篩選按鈕添加初始事件監聽器
+    diceFilterBtn.addEventListener('click', () => {
+        diceFilterEnabled = !diceFilterEnabled; // 切換篩選狀態
+        if (!diceFilterEnabled) {
+            diceOffset = 0; // 禁用篩選時重置偏移
+        }
+        displayResults(lastResults, lastClickedRow, lastClickedCol);
+    });
+</script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'92b4f23acf7d6a86',t:'MTc0MzgxMzEyNC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
