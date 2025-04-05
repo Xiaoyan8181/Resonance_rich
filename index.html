@@ -145,7 +145,7 @@
         [0,0,2,1,1,1,1,1,2,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
     ];
 
-// 城市名稱映射
+    // 城市名稱映射
     const townNames = {
         '18,0': '阿妮塔發射中心',
         '18,12': '阿妮塔能源研究所',
@@ -176,32 +176,31 @@
     const infoPanel = document.getElementById('infoPanel');
     const diceFilterBtn = document.getElementById('diceFilterBtn');
 
-    // 骰子篩選的狀態
+    // 狀態變數
     let diceFilterEnabled = false;
     let diceOffset = 0; // 0: 1~6, 1: 2~7, 2: 3~8, 3: 4~9
-    let lastResults = null; // 儲存上次的計算結果
+    let lastResults = null;
     let lastClickedRow = null;
     let lastClickedCol = null;
-    let lastClickedCell = null; // 儲存上次點擊的格子（道路或城市）
+    let lastClickedCell = null;
+    let isDirectionMode = true; // 預設方向模式
+    let bannedDirection = null;
 
     // 重寫的 BFS 搜尋函數，嚴格禁止相鄰相反方向
     function bfs(startRow, startCol) {
         const queue = [{ row: startRow, col: startCol, steps: 0, path: [], prevDir: null }];
-        const visited = new Set(); // 記錄訪問過的格子與路徑
-        const allPaths = []; // 儲存所有找到的路徑
+        const visited = new Set();
+        const allPaths = [];
 
         while (queue.length > 0) {
             const { row, col, steps, path, prevDir } = queue.shift();
 
-            // 如果找到城市 (2) 且不是起點，記錄路徑
             if (mapData[row][col] === 2 && (row !== startRow || col !== startCol)) {
                 allPaths.push({ row, col, steps, path });
             }
 
-            // 如果步數超過 9，停止此路徑
             if (steps >= 9) continue;
 
-            // 定義四個方向
             const directions = [
                 { dr: -2, dc: 0, name: '上', opposite: '下' },
                 { dr: 2, dc: 0, name: '下', opposite: '上' },
@@ -210,7 +209,6 @@
             ];
 
             for (const { dr, dc, name, opposite } of directions) {
-                // 嚴格禁止與前一步相反的方向（除了第一步）
                 if (steps > 0 && prevDir === opposite) continue;
 
                 const newRow = row + dr;
@@ -218,16 +216,10 @@
                 const channelRow = row + dr / 2;
                 const channelCol = col + dc / 2;
 
-                // 檢查邊界
                 if (newRow < 0 || newRow >= 33 || newCol < 0 || newCol >= 55) continue;
-
-                // 檢查通道是否存在
                 if (mapData[channelRow][channelCol] !== 1) continue;
-
-                // 檢查新位置是否為道路或城市
                 if (mapData[newRow][newCol] !== 1 && mapData[newRow][newCol] !== 2) continue;
 
-                // 創建唯一鍵，包含座標和路徑
                 const key = `${newRow},${newCol},${path.join('')}`;
                 if (visited.has(key)) continue;
 
@@ -237,7 +229,7 @@
                     col: newCol,
                     steps: steps + 1,
                     path: [...path, name],
-                    prevDir: name // 更新前一步方向
+                    prevDir: name
                 });
             }
         }
@@ -257,16 +249,34 @@
         return classified;
     }
 
-    // 計算路徑上所有格子的座標（包括道路和通道）
+    // 檢查周圍是否有通道，返回可用方向
+    function getAvailableDirections(row, col) {
+        const directions = [];
+        const checks = [
+            { dr: -1, dc: 0, name: '上' },
+            { dr: 1, dc: 0, name: '下' },
+            { dr: 0, dc: -1, name: '左' },
+            { dr: 0, dc: 1, name: '右' }
+        ];
+
+        for (const { dr, dc, name } of checks) {
+            const channelRow = row + dr;
+            const channelCol = col + dc;
+            if (channelRow >= 0 && channelRow < 33 && channelCol >= 0 && channelCol < 55 && mapData[channelRow][channelCol] === 1) {
+                directions.push(name);
+            }
+        }
+        return directions;
+    }
+
+    // 計算路徑上所有格子的座標
     function getPathCells(startRow, startCol, path) {
         const cells = [];
         let currentRow = startRow;
         let currentCol = startCol;
 
-        // 添加起點
         cells.push({ row: currentRow, col: currentCol });
 
-        // 根據路徑方向計算每一步的格子
         for (const direction of path) {
             let channelRow, channelCol, newRow, newCol;
             if (direction === '上') {
@@ -291,11 +301,9 @@
                 newCol = currentCol + 2;
             }
 
-            // 添加通道和下一個道路格子
             cells.push({ row: channelRow, col: channelCol });
             cells.push({ row: newRow, col: newCol });
 
-            // 更新當前位置
             currentRow = newRow;
             currentCol = newCol;
         }
@@ -312,10 +320,8 @@
                 const cell = gameMap.children[index];
                 if (cell) {
                     if (mapData[row][col] === 2) {
-                        // 城市：黃色與橘色閃爍
                         cell.style.backgroundColor = isAlternate ? '#FFFF00' : '#FFA500';
                     } else {
-                        // 道路或通道：檢查是否為選中格子
                         if (cell === lastClickedCell) {
                             cell.style.backgroundColor = isAlternate ? '#0000FF' : '#00FF00';
                         } else {
@@ -325,7 +331,7 @@
                 }
             });
             isAlternate = !isAlternate;
-        }, 500); // 每 500ms 切換一次顏色
+        }, 500);
 
         return interval;
     }
@@ -338,37 +344,36 @@
             const cell = gameMap.children[index];
             if (cell) {
                 if (mapData[row][col] === 2) {
-                    cell.style.backgroundColor = '#FFFF00'; // 城市恢復黃色
+                    cell.style.backgroundColor = '#FFFF00';
                 } else if (cell === lastClickedCell) {
-                    cell.style.backgroundColor = '#0000FF'; // 選中的道路恢復藍色
+                    cell.style.backgroundColor = '#0000FF';
                 } else {
-                    cell.style.backgroundColor = '#808080'; // 其他道路和通道恢復灰色
+                    cell.style.backgroundColor = '#808080';
                 }
             }
         });
     }
 
-    // 顯示結果（可選啟用骰子篩選，並添加閃爍效果）
+    // 顯示結果
     function displayResults(results, row, col) {
         let html = `<h3>路徑資訊 (從 (${row}, ${col}))</h3>`;
-        html += '<button id="diceFilterBtn">以骰子篩選</button>';
+        html += `<button id="diceFilterBtn" style="background-color: ${diceFilterEnabled ? '#90EE90' : '#FFFFFF'}">以骰子篩選</button>`;
+        html += `<br><button id="directionModeBtn" style="background-color: ${isDirectionMode ? '#90EE90' : '#FFFFFF'}">方向模式</button>`;
+        html += `<button id="banModeBtn" style="background-color: ${!isDirectionMode ? '#90EE90' : '#FFFFFF'}">禁路徑模式</button>`;
 
-        // 如果啟用了骰子篩選，添加偏移按鈕
         if (diceFilterEnabled) {
-            html += `
-                <button id="diceOffsetBtn1">+1</button>
-                <button id="diceOffsetBtn2">+2</button>
-                <button id="diceOffsetBtn3">+3</button>
-            `;
+            html += '<br>';
+            for (let i = 0; i <= 3; i++) {
+                html += `<button class="dice-offset-btn" data-offset="${i}" style="background-color: ${diceOffset === i ? '#90EE90' : '#FFFFFF'}">+${i}</button>`;
+            }
         }
+
+        const minSteps = diceFilterEnabled ? 1 + diceOffset : 1;
+        const maxSteps = diceFilterEnabled ? 6 + diceOffset : 9;
 
         if (Object.keys(results).length === 0 || !Object.values(results).some(towns => towns.length > 0)) {
             html += '<p>從此格子出發，9 格以內無法到達任何城市。</p>';
-        } else {
-            // 如果啟用了骰子篩選，應用範圍限制
-            const minSteps = diceFilterEnabled ? 1 + diceOffset : 1;
-            const maxSteps = diceFilterEnabled ? 6 + diceOffset : 9;
-
+        } else if (isDirectionMode) {
             for (const direction in results) {
                 const towns = results[direction].filter(town => town.steps >= minSteps && town.steps <= maxSteps);
                 if (towns.length > 0) {
@@ -378,6 +383,31 @@
                         html += `<p class="path-item" data-start-row="${row}" data-start-col="${col}" data-path="${path.join(',')}">到達 ${townName}：${steps} 格，路徑：${path.join('')}</p>`;
                     }
                 }
+            }
+        } else {
+            const availableDirections = getAvailableDirections(row, col);
+            html += '<br>';
+            availableDirections.forEach(dir => {
+                html += `<button class="ban-direction-btn" data-direction="${dir}" style="background-color: ${bannedDirection === dir ? '#FF6347' : '#FFFFFF'}">${dir}</button>`;
+            });
+
+            let allPaths = [];
+            for (const direction in results) {
+                if (bannedDirection === null || direction !== bannedDirection) {
+                    allPaths = allPaths.concat(results[direction]);
+                }
+            }
+            allPaths.sort((a, b) => a.steps - b.steps);
+
+            const filteredPaths = allPaths.filter(town => town.steps >= minSteps && town.steps <= maxSteps);
+            if (filteredPaths.length > 0) {
+                html += '<p><strong>可行路徑（按步數排序）：</strong></p>';
+                for (const { row: townRow, col: townCol, steps, path } of filteredPaths) {
+                    const townName = getTownName(townRow, townCol);
+                    html += `<p class="path-item" data-start-row="${row}" data-start-col="${col}" data-path="${path.join(',')}">到達 ${townName}：${steps} 格，路徑：${path.join('')}</p>`;
+                }
+            } else {
+                html += '<p>無可行路徑。</p>';
             }
         }
 
@@ -403,87 +433,89 @@
             });
         });
 
-        // 為按鈕重新附加事件監聽器
+        // 為模式按鈕添加事件
+        document.getElementById('directionModeBtn').addEventListener('click', () => {
+            isDirectionMode = true;
+            bannedDirection = null;
+            displayResults(lastResults, lastClickedRow, lastClickedCol);
+        });
+        document.getElementById('banModeBtn').addEventListener('click', () => {
+            isDirectionMode = false;
+            bannedDirection = null;
+            displayResults(lastResults, lastClickedRow, lastClickedCol);
+        });
+
+        // 為禁路徑模式的方向按鈕添加事件
+        const banButtons = document.querySelectorAll('.ban-direction-btn');
+        banButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                bannedDirection = btn.getAttribute('data-direction');
+                displayResults(lastResults, lastClickedRow, lastClickedCol);
+            });
+        });
+
+        // 為骰子篩選按鈕添加事件
         document.getElementById('diceFilterBtn').addEventListener('click', () => {
-            diceFilterEnabled = !diceFilterEnabled; // 切換篩選狀態
+            diceFilterEnabled = !diceFilterEnabled;
             if (!diceFilterEnabled) {
-                diceOffset = 0; // 禁用篩選時重置偏移
+                diceOffset = 0;
             }
             displayResults(lastResults, lastClickedRow, lastClickedCol);
         });
 
-        if (diceFilterEnabled) {
-            document.getElementById('diceOffsetBtn1').addEventListener('click', () => {
-                diceOffset = 1;
+        // 為骰子偏移按鈕添加事件
+        const offsetButtons = document.querySelectorAll('.dice-offset-btn');
+        offsetButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                diceOffset = parseInt(btn.getAttribute('data-offset'));
                 displayResults(lastResults, lastClickedRow, lastClickedCol);
             });
-            document.getElementById('diceOffsetBtn2').addEventListener('click', () => {
-                diceOffset = 2;
-                displayResults(lastResults, lastClickedRow, lastClickedCol);
-            });
-            document.getElementById('diceOffsetBtn3').addEventListener('click', () => {
-                diceOffset = 3;
-                displayResults(lastResults, lastClickedRow, lastClickedCol);
-            });
-        }
+        });
     }
 
     // 處理道路格子點擊的函數
     function handleRoadClick(cell, row, col) {
-        // 重置上一次點擊格子的顏色
         if (lastClickedCell) {
             if (mapData[lastClickedRow][lastClickedCol] === 2) {
-                lastClickedCell.style.backgroundColor = '#FFFF00'; // 恢復城市為黃色
+                lastClickedCell.style.backgroundColor = '#FFFF00';
             } else {
-                lastClickedCell.style.backgroundColor = '#808080'; // 恢復道路為灰色
+                lastClickedCell.style.backgroundColor = '#808080';
             }
             lastClickedCell.classList.remove('selected');
         }
 
-        // 高亮顯示被點擊的格子為藍色
         cell.style.backgroundColor = '#0000FF';
         cell.classList.add('selected');
         lastClickedCell = cell;
 
-        // 儲存點擊的位置
         lastClickedRow = row;
         lastClickedCol = col;
 
-        // 執行 BFS 搜尋所有路徑
         const allPaths = bfs(row, col);
-
-        // 根據第一步方向分類
         const classifiedResults = classifyPaths(allPaths);
-
-        // 儲存結果以供篩選
         lastResults = classifiedResults;
 
-        // 顯示結果
         displayResults(classifiedResults, row, col);
     }
 
     // 處理城市格子點擊的函數
     function handleTownClick(cell, row, col) {
-        // 重置上一次點擊格子的顏色
         if (lastClickedCell) {
             if (mapData[lastClickedRow][lastClickedCol] === 2) {
-                lastClickedCell.style.backgroundColor = '#FFFF00'; // 恢復城市為黃色
+                lastClickedCell.style.backgroundColor = '#FFFF00';
             } else {
-                lastClickedCell.style.backgroundColor = '#808080'; // 恢復道路為灰色
+                lastClickedCell.style.backgroundColor = '#808080';
             }
             lastClickedCell.classList.remove('selected');
         }
 
-        // 高亮顯示被點擊的城市為紅色
         cell.style.backgroundColor = '#FF0000';
         cell.classList.add('selected');
         lastClickedCell = cell;
 
-        // 儲存點擊的位置
         lastClickedRow = row;
         lastClickedCol = col;
 
-        // 顯示城市名稱
         const townName = getTownName(row, col);
         infoPanel.innerHTML = `<h3>城市: ${townName}</h3>`;
     }
@@ -494,11 +526,9 @@
             const cell = document.createElement('div');
             cell.classList.add('cell');
 
-            // 判斷當前位置是否為偶數行或列（通道）
             const isEvenRow = row % 2 === 0;
             const isEvenCol = col % 2 === 0;
 
-            // 根據數據確定格子類型
             if (mapData[row][col] === 0) {
                 cell.classList.add('empty');
             } else if (mapData[row][col] === 1) {
@@ -508,11 +538,8 @@
                     cell.classList.add('channel-vertical');
                 } else {
                     cell.classList.add('road');
-
-                    // 為道路格子添加點擊事件
                     cell.addEventListener('click', () => handleRoadClick(cell, row, col));
 
-                    // 檢查相連的道路（僅適用於道路，不包括通道）
                     if (!isEvenRow && !isEvenCol) {
                         if (col < 54 && col % 2 === 0 && mapData[row][col + 1] === 1 && mapData[row][col + 2] === 1) {
                             cell.classList.add('connected-right');
@@ -530,9 +557,8 @@
                 }
             } else if (mapData[row][col] === 2) {
                 cell.classList.add('town');
-                // 為城市格子添加點擊事件和懸停樣式
                 cell.addEventListener('click', () => handleTownClick(cell, row, col));
-                cell.style.cursor = 'pointer'; // 滑鼠懸停時顯示可點擊樣式
+                cell.style.cursor = 'pointer';
             }
 
             gameMap.appendChild(cell);
@@ -541,9 +567,9 @@
 
     // 為骰子篩選按鈕添加初始事件監聽器
     diceFilterBtn.addEventListener('click', () => {
-        diceFilterEnabled = !diceFilterEnabled; // 切換篩選狀態
+        diceFilterEnabled = !diceFilterEnabled;
         if (!diceFilterEnabled) {
-            diceOffset = 0; // 禁用篩選時重置偏移
+            diceOffset = 0;
         }
         displayResults(lastResults, lastClickedRow, lastClickedCol);
     });
