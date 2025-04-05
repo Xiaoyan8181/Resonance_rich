@@ -357,7 +357,7 @@
     // 顯示結果
     function displayResults(results, row, col) {
         let html = `<h3>路徑資訊 (從 (${row}, ${col}))</h3>`;
-        html += `<button id="diceFilterBtn" style="background-color: ${diceFilterEnabled ? '#90EE90' : '#FFFFFF'}">以骰子篩選</button>`;
+	html += `<button id="diceFilterBtn" style="background-color: ${diceFilterEnabled ? '#90EE90' : '#FFFFFF'}; color: #000000">以骰子篩選</button>`;
         html += `<br><button id="directionModeBtn" style="background-color: ${isDirectionMode ? '#90EE90' : '#FFFFFF'}">方向模式</button>`;
         html += `<button id="banModeBtn" style="background-color: ${!isDirectionMode ? '#90EE90' : '#FFFFFF'}">禁路徑模式</button>`;
 
