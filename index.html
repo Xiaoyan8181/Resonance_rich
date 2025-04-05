@@ -311,22 +311,29 @@
         return cells;
     }
 
-    // 開始閃爍效果
+// 開始閃爍效果
     function startBlinking(cells) {
         let isAlternate = false;
         const interval = setInterval(() => {
-            cells.forEach(({ row, col }) => {
-                const index = row * 55 + col;
-                const cell = gameMap.children[index];
+            cells.forEach(({ row, col }, index) => {
+                const indexInMap = row * 55 + col;
+                const cell = gameMap.children[indexInMap];
                 if (cell) {
-                    if (mapData[row][col] === 2) {
+                    // 如果是已點擊的起點格子（城市或道路），保持原色不閃爍
+                    if (cell === lastClickedCell) {
+                        cell.style.backgroundColor = mapData[row][col] === 2 ? '#FF0000' : '#0000FF';
+                    }
+                    // 如果是最後一個格子（終點城市），在黃色和橘色間閃爍
+                    else if (mapData[row][col] === 2 && index === cells.length - 1) {
                         cell.style.backgroundColor = isAlternate ? '#FFFF00' : '#FFA500';
-                    } else {
-                        if (cell === lastClickedCell) {
-                            cell.style.backgroundColor = isAlternate ? '#0000FF' : '#00FF00';
-                        } else {
-                            cell.style.backgroundColor = isAlternate ? '#808080' : '#00FF00';
-                        }
+                    }
+                    // 如果是途中城市，在黃色和白色間閃爍
+                    else if (mapData[row][col] === 2) {
+                        cell.style.backgroundColor = isAlternate ? '#FFFF00' : '#FFFFFF';
+                    }
+                    // 其他經過的道路和通道，保持灰色和綠色閃爍
+                    else {
+                        cell.style.backgroundColor = isAlternate ? '#808080' : '#00FF00';
                     }
                 }
             });
@@ -343,11 +350,16 @@
             const index = row * 55 + col;
             const cell = gameMap.children[index];
             if (cell) {
-                if (mapData[row][col] === 2) {
+                // 如果是已點擊的起點格子，恢復紅色（城市）或藍色（道路）
+                if (cell === lastClickedCell) {
+                    cell.style.backgroundColor = mapData[row][col] === 2 ? '#FF0000' : '#0000FF';
+                }
+                // 如果是其他城市（無論途中或終點），恢復黃色
+                else if (mapData[row][col] === 2) {
                     cell.style.backgroundColor = '#FFFF00';
-                } else if (cell === lastClickedCell) {
-                    cell.style.backgroundColor = '#0000FF';
-                } else {
+                }
+                // 其他道路恢復灰色
+                else {
                     cell.style.backgroundColor = '#808080';
                 }
             }
@@ -356,7 +368,6 @@
 
     // 顯示結果
     function displayResults(results, row, col, isTown = false) {
-        // 如果是城市，使用城市名稱；否則使用坐標
         const title = isTown ? getTownName(row, col) : `(${row}, ${col})`;
         let html = `<h3>路徑資訊 (從 ${title})</h3>`;
         html += `<button id="diceFilterBtn" style="background-color: ${diceFilterEnabled ? '#90EE90' : '#FFFFFF'}; color: #000000">以骰子篩選</button>`;
